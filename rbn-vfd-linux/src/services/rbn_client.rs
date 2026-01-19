@@ -148,7 +148,7 @@ async fn handle_connection(
                     Ok(_) => {
                         // Handle login
                         if !logged_in
-                            && line.to_lowercase().contains("please enter your call")
+                            && line.to_lowercase().contains("please enter your callsign")
                             && writer
                                 .write_all(format!("{}\r\n", callsign).as_bytes())
                                 .await

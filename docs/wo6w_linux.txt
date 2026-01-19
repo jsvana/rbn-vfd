@@ -1,0 +1,54 @@
+Build a linux application that will accumulate amateur radio station spots from the
+reverse beacon network using a telnet connection to the RBN.
+An amateur radio call sign is used when connecting to the RBN. The default call sign
+shall be W6JSV. The call sign used to connect to the RBN may be changed by a user
+once the program is running.
+Build a list of the received spots in a data structure retaining just one entry for each
+spotted station. The spot retained for a given station will have the highest SNR for that
+station if it is spotted multiple times on a single frequency. The speed retained will be
+the average of reported speeds for a given spotted station. The frequency retained will
+be the average reported frequency if spotted multiple times on frequencies within 1 kHz
+of each other. Spots will be considered distinct if the reported frequencies are more than
+1 kHz apart.
+Entries in the data structure will be updated as new spots are accumulated. Old spots
+will be purged from the data structure after a specified number of minutes since they
+were last spotted.
+Display the reported spots stored in the data structure to an ELO 24 character x 2 line
+VFD Rear Facing Customer Display USB 2X20 E-Series E122426 / ESYxxE2x.
+The ELO display will be on a serial com port. The com port to use is selected by the
+user from a pull-down listing current defined com ports.
+The com port settings shall be “9600, 8, n, 1”.
+The program will not connect to the RBN until both the amateur radio call sign and com
+port to use have been entered by the user or saved values for these settings have been
+confirmed.
+Display one spotted station per line on the ELO display. A line of the display will include
+only the spotted frequency to 100 Hz resolution, spotted call sign and speed in WPM
+looking like “14033.0 WO6W 24”.
+The ELO display will show one or two spotted stations if there are only two spots to
+report.
+The display will roll lines from one spot to the next with a user specified interval between
+each update of the display if there are more than two spots to display.
+There will be radio buttons for the user to specify minimum SNR for a spot to be
+captured in the data structure. Spots below the minimum SNR will be discarded. SNR
+buttons in 10 dBm intervals.
+
+There will be radio buttons for the user to specify maximum age for a spot before it is
+purged.
+There will be radio buttons for the user to specify the interval between each scroll of the
+display if there are more than two active spots at any time. Each line of the display will
+be written at full speed, scrolling by full lines at the user specified interval.
+The program will save the current amateur radio call sign, minimum SNR and scrolling
+interval when it exits. If previously saved, these values will be restored when the
+program is run again. The saved state is stored in a .ini file that is person readable and
+that the user can edit. The .ini file is stored in the executable file directory.
+
+While there are no active spots to display, a single randomly selected character will be
+displayed at a randomly selected position on the ELO display. A new random character
+and random position will be selected at the user selected scrolling interval. The random
+character will be displayed with an approximate 20% duty cycle.
+The program window on the computer shall list the current filtered spots, the amateur
+radio call sign and com port used for the RBN connection.
+The display scrolling interval and minimum SNR values may be changed by the user at
+any time while the program is running.
+
+Write the application in Rust using the egui framework.
