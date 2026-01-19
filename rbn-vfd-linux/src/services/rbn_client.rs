@@ -18,11 +18,11 @@ pub enum RbnMessage {
 /// Commands sent to the RBN client
 #[derive(Debug)]
 pub enum RbnCommand {
-    Connect(String), // callsign
+    Connect(String),
     Disconnect,
 }
 
-/// RBN client that runs in a tokio task
+/// Handle to communicate with the RBN client task
 pub struct RbnClient {
     cmd_tx: mpsc::Sender<RbnCommand>,
     msg_rx: mpsc::Receiver<RbnMessage>,
@@ -34,25 +34,27 @@ impl RbnClient {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (msg_tx, msg_rx) = mpsc::channel(256);
 
-        tokio::spawn(rbn_task(cmd_rx, msg_tx));
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to create tokio runtime");
+            rt.block_on(rbn_task(cmd_rx, msg_tx));
+        });
 
         Self { cmd_tx, msg_rx }
     }
 
-    /// Send a connect command
-    pub async fn connect(&self, callsign: String) -> Result<(), String> {
-        self.cmd_tx
-            .send(RbnCommand::Connect(callsign))
-            .await
-            .map_err(|e| format!("Failed to send connect command: {}", e))
+    /// Send a connect command (non-blocking from UI)
+    pub fn connect(&self, callsign: String) {
+        let tx = self.cmd_tx.clone();
+        let _ = tx.blocking_send(RbnCommand::Connect(callsign));
     }
 
-    /// Send a disconnect command
-    pub async fn disconnect(&self) -> Result<(), String> {
-        self.cmd_tx
-            .send(RbnCommand::Disconnect)
-            .await
-            .map_err(|e| format!("Failed to send disconnect command: {}", e))
+    /// Send a disconnect command (non-blocking from UI)
+    pub fn disconnect(&self) {
+        let tx = self.cmd_tx.clone();
+        let _ = tx.blocking_send(RbnCommand::Disconnect);
     }
 
     /// Try to receive a message (non-blocking)
@@ -65,128 +67,120 @@ async fn rbn_task(mut cmd_rx: mpsc::Receiver<RbnCommand>, msg_tx: mpsc::Sender<R
     let spot_regex = Regex::new(
         r"DX de (\S+):\s+(\d+\.?\d*)\s+(\S+)\s+(\w+)\s+(\d+)\s+dB\s+(\d+)\s+WPM",
     )
-    .unwrap();
-
-    let mut stream: Option<TcpStream> = None;
+    .expect("Invalid regex");
 
     loop {
-        tokio::select! {
-            Some(cmd) = cmd_rx.recv() => {
-                match cmd {
-                    RbnCommand::Connect(callsign) => {
-                        // Disconnect existing connection first
-                        stream = None;
-
-                        let _ = msg_tx.send(RbnMessage::Status(
-                            format!("Connecting to {}:{}...", RBN_HOST, RBN_PORT)
-                        )).await;
-
-                        match TcpStream::connect((RBN_HOST, RBN_PORT)).await {
-                            Ok(s) => {
-                                let _ = msg_tx.send(RbnMessage::Status(
-                                    "Connected, waiting for login prompt...".to_string()
-                                )).await;
-                                stream = Some(s);
-
-                                // Handle login in a separate block
-                                if let Some(ref mut s) = stream {
-                                    if let Err(e) = handle_login(s, &callsign, &msg_tx).await {
-                                        let _ = msg_tx.send(RbnMessage::Status(
-                                            format!("Login failed: {}", e)
-                                        )).await;
-                                        stream = None;
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                let _ = msg_tx.send(RbnMessage::Status(
-                                    format!("Connection failed: {}", e)
-                                )).await;
-                            }
-                        }
-                    }
-                    RbnCommand::Disconnect => {
-                        stream = None;
-                        let _ = msg_tx.send(RbnMessage::Status("Disconnected".to_string())).await;
-                        let _ = msg_tx.send(RbnMessage::Disconnected).await;
-                    }
-                }
+        // Wait for a connect command
+        let callsign = loop {
+            match cmd_rx.recv().await {
+                Some(RbnCommand::Connect(cs)) => break cs,
+                Some(RbnCommand::Disconnect) => continue,
+                None => return, // Channel closed
             }
-            _ = async {
-                if let Some(ref mut s) = stream {
-                    let mut reader = BufReader::new(s);
-                    let mut line = String::new();
-                    match reader.read_line(&mut line).await {
-                        Ok(0) => {
-                            // Connection closed
-                            let _ = msg_tx.send(RbnMessage::Status("Connection closed".to_string())).await;
-                            let _ = msg_tx.send(RbnMessage::Disconnected).await;
-                            return true; // Signal to clear stream
-                        }
-                        Ok(_) => {
-                            if let Some(spot) = parse_spot_line(&line, &spot_regex) {
-                                let _ = msg_tx.send(RbnMessage::Spot(spot)).await;
-                            }
-                        }
-                        Err(e) => {
-                            let _ = msg_tx.send(RbnMessage::Status(format!("Read error: {}", e))).await;
-                            return true; // Signal to clear stream
-                        }
-                    }
-                }
-                false
-            }, if stream.is_some() => {
-                // Handle result - stream needs clearing handled above
+        };
+
+        let _ = msg_tx
+            .send(RbnMessage::Status(format!(
+                "Connecting to {}:{}...",
+                RBN_HOST, RBN_PORT
+            )))
+            .await;
+
+        // Try to connect
+        let stream = match TcpStream::connect((RBN_HOST, RBN_PORT)).await {
+            Ok(s) => s,
+            Err(e) => {
+                let _ = msg_tx
+                    .send(RbnMessage::Status(format!("Connection failed: {}", e)))
+                    .await;
+                let _ = msg_tx.send(RbnMessage::Disconnected).await;
+                continue;
             }
-            else => {
-                // No stream, just wait for commands
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            }
-        }
+        };
+
+        let _ = msg_tx
+            .send(RbnMessage::Status(
+                "Connected, waiting for login prompt...".to_string(),
+            ))
+            .await;
+
+        // Handle the connection
+        handle_connection(stream, &callsign, &mut cmd_rx, &msg_tx, &spot_regex).await;
+
+        let _ = msg_tx.send(RbnMessage::Disconnected).await;
     }
 }
 
-async fn handle_login(
-    stream: &mut TcpStream,
+async fn handle_connection(
+    stream: TcpStream,
     callsign: &str,
+    cmd_rx: &mut mpsc::Receiver<RbnCommand>,
     msg_tx: &mpsc::Sender<RbnMessage>,
-) -> Result<(), String> {
-    let mut reader = BufReader::new(&mut *stream);
+    spot_regex: &Regex,
+) {
+    let (reader, mut writer) = stream.into_split();
+    let mut reader = BufReader::new(reader);
     let mut line = String::new();
+    let mut logged_in = false;
 
-    // Read until we get the login prompt
     loop {
-        line.clear();
-        match reader.read_line(&mut line).await {
-            Ok(0) => return Err("Connection closed".to_string()),
-            Ok(_) => {
-                if line.to_lowercase().contains("please enter your call") {
-                    // Send callsign
-                    stream
-                        .write_all(format!("{}\r\n", callsign).as_bytes())
-                        .await
-                        .map_err(|e| format!("Failed to send callsign: {}", e))?;
-
-                    let _ = msg_tx
-                        .send(RbnMessage::Status(format!("Logged in as {}", callsign)))
-                        .await;
-                    return Ok(());
+        tokio::select! {
+            // Check for commands
+            cmd = cmd_rx.recv() => {
+                match cmd {
+                    Some(RbnCommand::Disconnect) | None => {
+                        let _ = msg_tx.send(RbnMessage::Status("Disconnected".to_string())).await;
+                        return;
+                    }
+                    Some(RbnCommand::Connect(_)) => {
+                        // Already connected, ignore
+                    }
                 }
             }
-            Err(e) => return Err(format!("Read error: {}", e)),
+
+            // Read from stream
+            result = reader.read_line(&mut line) => {
+                match result {
+                    Ok(0) => {
+                        let _ = msg_tx.send(RbnMessage::Status("Connection closed by server".to_string())).await;
+                        return;
+                    }
+                    Ok(_) => {
+                        // Handle login
+                        if !logged_in && line.to_lowercase().contains("please enter your call") {
+                            if writer.write_all(format!("{}\r\n", callsign).as_bytes()).await.is_ok() {
+                                let _ = msg_tx.send(RbnMessage::Status(format!("Logged in as {}", callsign))).await;
+                                logged_in = true;
+                            }
+                        }
+
+                        // Parse spots
+                        if line.starts_with("DX de") {
+                            if let Some(spot) = parse_spot_line(&line, spot_regex) {
+                                let _ = msg_tx.send(RbnMessage::Spot(spot)).await;
+                            }
+                        }
+
+                        line.clear();
+                    }
+                    Err(e) => {
+                        let _ = msg_tx.send(RbnMessage::Status(format!("Read error: {}", e))).await;
+                        return;
+                    }
+                }
+            }
         }
     }
 }
 
 fn parse_spot_line(line: &str, regex: &Regex) -> Option<RawSpot> {
-    if !line.starts_with("DX de") {
-        return None;
-    }
-
     let caps = regex.captures(line)?;
 
     Some(RawSpot::new(
-        caps.get(1)?.as_str().trim_end_matches(|c| c == '-' || c == '#' || c == ':').to_string(),
+        caps.get(1)?
+            .as_str()
+            .trim_end_matches(|c| c == '-' || c == '#' || c == ':')
+            .to_string(),
         caps.get(3)?.as_str().to_string(),
         caps.get(2)?.as_str().parse().ok()?,
         caps.get(5)?.as_str().parse().ok()?,

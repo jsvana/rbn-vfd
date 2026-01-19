@@ -16,7 +16,6 @@ pub struct RbnVfdApp {
     is_connected: bool,
     last_purge: Instant,
     last_port_refresh: Instant,
-    runtime: tokio::runtime::Runtime,
 }
 
 impl RbnVfdApp {
@@ -34,8 +33,6 @@ impl RbnVfdApp {
             available_ports.first().cloned().unwrap_or_default()
         };
 
-        let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
-
         Self {
             callsign_input: config.callsign.clone(),
             config,
@@ -48,7 +45,6 @@ impl RbnVfdApp {
             is_connected: false,
             last_purge: Instant::now(),
             last_port_refresh: Instant::now(),
-            runtime,
         }
     }
 
@@ -62,12 +58,8 @@ impl RbnVfdApp {
         let callsign = self.callsign_input.trim().to_uppercase();
         self.config.callsign = callsign.clone();
 
-        // Create client and connect
-        let client = self.runtime.block_on(async {
-            let client = RbnClient::new();
-            let _ = client.connect(callsign).await;
-            client
-        });
+        let client = RbnClient::new();
+        client.connect(callsign);
 
         self.rbn_client = Some(client);
         self.is_connected = true;
@@ -77,9 +69,7 @@ impl RbnVfdApp {
     /// Disconnect from RBN server
     fn disconnect_rbn(&mut self) {
         if let Some(ref client) = self.rbn_client {
-            self.runtime.block_on(async {
-                let _ = client.disconnect().await;
-            });
+            client.disconnect();
         }
         self.rbn_client = None;
         self.is_connected = false;
