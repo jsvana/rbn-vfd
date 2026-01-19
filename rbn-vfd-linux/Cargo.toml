@@ -1,0 +1,15 @@
+[package]
+name = "rbn-vfd-linux"
+version = "0.1.0"
+edition = "2021"
+description = "RBN VFD Spot Display for Linux"
+license = "MIT"
+
+[dependencies]
+eframe = "0.31"
+tokio = { version = "1", features = ["full"] }
+serialport = "4.7"
+configparser = "3"
+directories = "5"
+rand = "0.8"
+regex = "1"
