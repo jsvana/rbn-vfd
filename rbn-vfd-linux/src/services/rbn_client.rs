@@ -1,6 +1,6 @@
 use crate::models::RawSpot;
 use regex::Regex;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 
@@ -122,8 +122,9 @@ async fn handle_connection(
 ) {
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
-    let mut line = String::new();
+    let mut buffer = String::new();
     let mut logged_in = false;
+    let mut byte_buf = [0u8; 1024];
 
     loop {
         tokio::select! {
@@ -140,26 +141,52 @@ async fn handle_connection(
                 }
             }
 
-            // Read from stream
-            result = reader.read_line(&mut line) => {
+            // Read from stream - read bytes instead of lines to handle prompts without newlines
+            result = reader.read(&mut byte_buf) => {
                 match result {
                     Ok(0) => {
                         let _ = msg_tx.send(RbnMessage::Status("Connection closed by server".to_string())).await;
                         return;
                     }
-                    Ok(_) => {
-                        // Send raw received data for debugging
-                        let _ = msg_tx
-                            .send(RbnMessage::RawData {
-                                data: line.clone(),
-                                received: true,
-                            })
-                            .await;
+                    Ok(n) => {
+                        // Convert bytes to string and append to buffer
+                        if let Ok(chunk) = std::str::from_utf8(&byte_buf[..n]) {
+                            buffer.push_str(chunk);
+                        }
 
-                        // Handle login
-                        if !logged_in
-                            && line.to_lowercase().contains("please enter your callsign")
-                        {
+                        // Process complete lines (ending with \n)
+                        while let Some(newline_pos) = buffer.find('\n') {
+                            let line: String = buffer.drain(..=newline_pos).collect();
+
+                            // Send raw received data for debugging
+                            let _ = msg_tx
+                                .send(RbnMessage::RawData {
+                                    data: line.clone(),
+                                    received: true,
+                                })
+                                .await;
+
+                            // Parse spots from complete lines
+                            if line.starts_with("DX de") {
+                                if let Some(spot) = parse_spot_line(&line, spot_regex) {
+                                    let _ = msg_tx.send(RbnMessage::Spot(spot)).await;
+                                }
+                            }
+                        }
+
+                        // Check for login prompt in remaining buffer (may not end with newline)
+                        if !logged_in && buffer.to_lowercase().contains("please enter your callsign") {
+                            // Send remaining buffer as raw data for debugging
+                            if !buffer.is_empty() {
+                                let _ = msg_tx
+                                    .send(RbnMessage::RawData {
+                                        data: buffer.clone(),
+                                        received: true,
+                                    })
+                                    .await;
+                                buffer.clear();
+                            }
+
                             let send_data = format!("{}\r\n", callsign);
                             if writer.write_all(send_data.as_bytes()).await.is_ok() {
                                 // Send raw sent data for debugging
@@ -175,15 +202,6 @@ async fn handle_connection(
                                 logged_in = true;
                             }
                         }
-
-                        // Parse spots
-                        if line.starts_with("DX de") {
-                            if let Some(spot) = parse_spot_line(&line, spot_regex) {
-                                let _ = msg_tx.send(RbnMessage::Spot(spot)).await;
-                            }
-                        }
-
-                        line.clear();
                     }
                     Err(e) => {
                         let _ = msg_tx.send(RbnMessage::Status(format!("Read error: {}", e))).await;
