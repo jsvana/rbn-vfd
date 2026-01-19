@@ -1,5 +1,7 @@
+mod config;
 mod models;
 
 fn main() {
-    println!("RBN VFD Display");
+    let config = config::Config::load();
+    println!("Loaded config: {:?}", config);
 }
