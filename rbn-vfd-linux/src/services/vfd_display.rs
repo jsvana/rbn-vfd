@@ -7,10 +7,8 @@ use std::time::{Duration, Instant};
 const DISPLAY_WIDTH: usize = 20;
 const DISPLAY_LINES: usize = 2;
 
-// ESC/POS commands
-const CLEAR_DISPLAY: &[u8] = &[0x0C];
-const MOVE_LINE1: &[u8] = &[0x1B, 0x5B, 0x31, 0x3B, 0x31, 0x48]; // ESC [ 1;1 H
-const MOVE_LINE2: &[u8] = &[0x1B, 0x5B, 0x32, 0x3B, 0x31, 0x48]; // ESC [ 2;1 H
+// VFD commands - simple protocol without ANSI escape sequences
+const CLEAR_DISPLAY: &[u8] = &[0x0C]; // Form feed - clear and home cursor
 
 /// VFD Display controller
 pub struct VfdDisplay {
@@ -120,20 +118,40 @@ impl VfdDisplay {
         self.current_lines = [String::new(), String::new()];
     }
 
+    /// Pad or truncate text to exactly DISPLAY_WIDTH characters
+    fn format_line(text: &str) -> String {
+        format!("{:width$}", text, width = DISPLAY_WIDTH)
+            .chars()
+            .take(DISPLAY_WIDTH)
+            .collect()
+    }
+
+    /// Write both lines to the display
+    /// Uses simple protocol: clear, then write 40 chars (20 per line, auto-wraps)
+    fn write_display(&mut self, line1: &str, line2: &str) {
+        if let Some(ref mut port) = self.port {
+            // Clear and home cursor
+            let _ = port.write_all(CLEAR_DISPLAY);
+
+            // Write line 1 (exactly 20 chars) - cursor auto-advances
+            let padded1 = Self::format_line(line1);
+            let _ = port.write_all(padded1.as_bytes());
+
+            // Write line 2 (exactly 20 chars) - wraps to second line
+            let padded2 = Self::format_line(line2);
+            let _ = port.write_all(padded2.as_bytes());
+        }
+        self.current_lines[0] = line1.to_string();
+        self.current_lines[1] = line2.to_string();
+    }
+
     /// Write text to a specific line (0 or 1)
     fn write_line(&mut self, line: usize, text: &str) {
-        if let Some(ref mut port) = self.port {
-            let move_cmd = if line == 0 { MOVE_LINE1 } else { MOVE_LINE2 };
-            let _ = port.write_all(move_cmd);
-
-            // Pad or truncate to exactly DISPLAY_WIDTH
-            let padded: String = format!("{:width$}", text, width = DISPLAY_WIDTH)
-                .chars()
-                .take(DISPLAY_WIDTH)
-                .collect();
-            let _ = port.write_all(padded.as_bytes());
-        }
+        // Update internal state and rewrite entire display
         self.current_lines[line] = text.to_string();
+        let line1 = self.current_lines[0].clone();
+        let line2 = self.current_lines[1].clone();
+        self.write_display(&line1, &line2);
     }
 
     /// Update display with spots (call periodically)
