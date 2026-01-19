@@ -1,0 +1,236 @@
+<Window x:Class="RbnVfdDisplay.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RBN VFD Spot Display" 
+        Height="750" Width="900"
+        MinHeight="650" MinWidth="800"
+        WindowStartupLocation="CenterScreen"
+        Closing="Window_Closing">
+    
+    <Window.Resources>
+        <Style x:Key="VfdDisplayStyle" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Foreground" Value="#00FF00"/>
+            <Setter Property="Background" Value="#001100"/>
+            <Setter Property="Padding" Value="10"/>
+        </Style>
+    </Window.Resources>
+    
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Connection Settings Row -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- RBN Connection -->
+            <GroupBox Grid.Column="0" Header="RBN Connection" Style="{StaticResource GroupBoxStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Label Grid.Row="0" Grid.Column="0" Content="Your Callsign:" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="CallsignTextBox" Style="{StaticResource TextBoxStyle}" 
+                             Text="W6JSV" CharacterCasing="Upper" MaxLength="10"/>
+                    <Button Grid.Row="0" Grid.Column="2" x:Name="ConnectButton" Content="Connect" 
+                            Style="{StaticResource ButtonStyle}" Click="ConnectButton_Click"/>
+                    
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" x:Name="RbnStatusText" 
+                               Text="Disconnected" Margin="5" Foreground="Gray"/>
+                </Grid>
+            </GroupBox>
+            
+            <!-- VFD Display Connection -->
+            <GroupBox Grid.Column="1" Header="ELO VFD Display" Style="{StaticResource GroupBoxStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Label Grid.Row="0" Grid.Column="0" Content="COM Port:" Style="{StaticResource LabelStyle}" VerticalAlignment="Center"/>
+                    <ComboBox Grid.Row="0" Grid.Column="1" x:Name="ComPortComboBox" Style="{StaticResource ComboBoxStyle}"/>
+                    <Button Grid.Row="0" Grid.Column="2" x:Name="RefreshPortsButton" Content="↻" 
+                            ToolTip="Refresh COM ports" Width="30" Margin="5" Click="RefreshPortsButton_Click"/>
+                    <Button Grid.Row="0" Grid.Column="3" x:Name="OpenVfdButton" Content="Open" 
+                            Style="{StaticResource ButtonStyle}" Click="OpenVfdButton_Click"/>
+                    
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4" x:Name="VfdStatusText" 
+                               Text="Closed" Margin="5" Foreground="Gray"/>
+                </Grid>
+            </GroupBox>
+        </Grid>
+        
+        <!-- Settings Row -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- Minimum SNR Filter -->
+            <GroupBox Grid.Column="0" Header="Minimum SNR (dB)" Style="{StaticResource GroupBoxStyle}">
+                <StackPanel>
+                    <RadioButton x:Name="Snr0Radio" Content="0 dB (All)" GroupName="Snr" 
+                                 Style="{StaticResource RadioButtonStyle}" IsChecked="True" Checked="SnrRadio_Checked" Tag="0"/>
+                    <RadioButton x:Name="Snr10Radio" Content="10 dB" GroupName="Snr" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="SnrRadio_Checked" Tag="10"/>
+                    <RadioButton x:Name="Snr20Radio" Content="20 dB" GroupName="Snr" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="SnrRadio_Checked" Tag="20"/>
+                    <RadioButton x:Name="Snr30Radio" Content="30 dB" GroupName="Snr" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="SnrRadio_Checked" Tag="30"/>
+                    <RadioButton x:Name="Snr40Radio" Content="40 dB" GroupName="Snr" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="SnrRadio_Checked" Tag="40"/>
+                </StackPanel>
+            </GroupBox>
+            
+            <!-- Maximum Spot Age -->
+            <GroupBox Grid.Column="1" Header="Spot Expiry (minutes)" Style="{StaticResource GroupBoxStyle}">
+                <StackPanel>
+                    <RadioButton x:Name="Age5Radio" Content="5 minutes" GroupName="Age" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="AgeRadio_Checked" Tag="5"/>
+                    <RadioButton x:Name="Age10Radio" Content="10 minutes" GroupName="Age" 
+                                 Style="{StaticResource RadioButtonStyle}" IsChecked="True" Checked="AgeRadio_Checked" Tag="10"/>
+                    <RadioButton x:Name="Age15Radio" Content="15 minutes" GroupName="Age" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="AgeRadio_Checked" Tag="15"/>
+                    <RadioButton x:Name="Age30Radio" Content="30 minutes" GroupName="Age" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="AgeRadio_Checked" Tag="30"/>
+                    <RadioButton x:Name="Age60Radio" Content="60 minutes" GroupName="Age" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="AgeRadio_Checked" Tag="60"/>
+                </StackPanel>
+            </GroupBox>
+            
+            <!-- Scroll Interval -->
+            <GroupBox Grid.Column="2" Header="Scroll Interval (seconds)" Style="{StaticResource GroupBoxStyle}">
+                <StackPanel>
+                    <RadioButton x:Name="Scroll1Radio" Content="1 second" GroupName="Scroll" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="ScrollRadio_Checked" Tag="1000"/>
+                    <RadioButton x:Name="Scroll2Radio" Content="2 seconds" GroupName="Scroll" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="ScrollRadio_Checked" Tag="2000"/>
+                    <RadioButton x:Name="Scroll3Radio" Content="3 seconds" GroupName="Scroll" 
+                                 Style="{StaticResource RadioButtonStyle}" IsChecked="True" Checked="ScrollRadio_Checked" Tag="3000"/>
+                    <RadioButton x:Name="Scroll5Radio" Content="5 seconds" GroupName="Scroll" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="ScrollRadio_Checked" Tag="5000"/>
+                    <RadioButton x:Name="Scroll10Radio" Content="10 seconds" GroupName="Scroll" 
+                                 Style="{StaticResource RadioButtonStyle}" Checked="ScrollRadio_Checked" Tag="10000"/>
+                </StackPanel>
+            </GroupBox>
+        </Grid>
+        
+        <!-- VFD Preview Display -->
+        <GroupBox Grid.Row="2" Header="VFD Display Preview (24 x 2)" Style="{StaticResource GroupBoxStyle}">
+            <Border Background="#001100" CornerRadius="5" Padding="10">
+                <StackPanel>
+                    <Border BorderBrush="#004400" BorderThickness="1" Margin="2">
+                        <TextBlock x:Name="VfdLine1Preview" Style="{StaticResource VfdDisplayStyle}" 
+                                   Text="Waiting for spots..." FontFamily="Consolas" FontSize="18"/>
+                    </Border>
+                    <Border BorderBrush="#004400" BorderThickness="1" Margin="2">
+                        <TextBlock x:Name="VfdLine2Preview" Style="{StaticResource VfdDisplayStyle}" 
+                                   Text="" FontFamily="Consolas" FontSize="18"/>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </GroupBox>
+        
+        <!-- Main Content Area with Tabs -->
+        <TabControl Grid.Row="3" Margin="5">
+            <!-- Active Spots Tab -->
+            <TabItem Header="Active Spots">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
+                        <TextBlock x:Name="SpotCountText" Text="Active spots: 0" VerticalAlignment="Center" Margin="5"/>
+                        <Button Content="Clear All" Margin="10,0,0,0" Padding="10,3" Click="ClearSpotsButton_Click"/>
+                    </StackPanel>
+                    
+                    <ListView Grid.Row="1" x:Name="SpotsListView" Margin="5">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="Callsign" Width="100" DisplayMemberBinding="{Binding Callsign}"/>
+                                <GridViewColumn Header="Frequency (kHz)" Width="120" DisplayMemberBinding="{Binding FrequencyKhz, StringFormat=F1}"/>
+                                <GridViewColumn Header="SNR (dB)" Width="80" DisplayMemberBinding="{Binding HighestSnr}"/>
+                                <GridViewColumn Header="Speed (WPM)" Width="100" DisplayMemberBinding="{Binding AverageSpeed, StringFormat=F0}"/>
+                                <GridViewColumn Header="Spots" Width="60" DisplayMemberBinding="{Binding SpotCount}"/>
+                                <GridViewColumn Header="Last Spotted" Width="150" DisplayMemberBinding="{Binding LastSpottedUtc, StringFormat=HH:mm:ss}"/>
+                                <GridViewColumn Header="Display Format" Width="200" DisplayMemberBinding="{Binding DisplayString}"/>
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </Grid>
+            </TabItem>
+            
+            <!-- Raw Data Tab -->
+            <TabItem Header="RBN Raw Data">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="5">
+                        <CheckBox x:Name="AutoScrollCheckBox" Content="Auto-scroll" IsChecked="True" VerticalAlignment="Center"/>
+                        <Button Content="Clear" Margin="10,0,0,0" Padding="10,3" Click="ClearRawDataButton_Click"/>
+                    </StackPanel>
+                    
+                    <TextBox Grid.Row="1" x:Name="RawDataTextBox" 
+                             FontFamily="Consolas" FontSize="11"
+                             IsReadOnly="True" 
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"
+                             TextWrapping="NoWrap"
+                             Margin="5"/>
+                </Grid>
+            </TabItem>
+            
+            <!-- Debug Log Tab -->
+            <TabItem Header="Debug Log">
+                <TextBox x:Name="DebugLogTextBox" 
+                         FontFamily="Consolas" FontSize="11"
+                         IsReadOnly="True" 
+                         VerticalScrollBarVisibility="Auto"
+                         TextWrapping="Wrap"
+                         Margin="5"/>
+            </TabItem>
+        </TabControl>
+        
+        <!-- Status Bar -->
+        <StatusBar Grid.Row="4">
+            <StatusBarItem>
+                <TextBlock x:Name="StatusBarText" Text="Ready"/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock x:Name="SpotRateText" Text="Spots/min: 0"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>
