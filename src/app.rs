@@ -174,6 +174,48 @@ impl RbnVfdApp {
     }
 }
 
+/// Draw an age ring indicator
+fn draw_age_ring(ui: &mut egui::Ui, fraction: f32) {
+    let size = 16.0;
+    let (response, painter) = ui.allocate_painter(egui::Vec2::splat(size), egui::Sense::hover());
+    let center = response.rect.center();
+    let radius = size / 2.0 - 2.0;
+
+    // Ring color - static green
+    let color = egui::Color32::from_rgb(0, 200, 0);
+
+    // Draw background circle (dim)
+    painter.circle_stroke(center, radius, egui::Stroke::new(2.0, egui::Color32::from_rgb(40, 40, 40)));
+
+    // Draw arc for remaining time (1.0 - fraction = remaining)
+    let remaining = 1.0 - fraction;
+    if remaining > 0.001 {
+        // Arc from 12 o'clock (-PI/2), sweeping counter-clockwise
+        let start_angle = -std::f32::consts::FRAC_PI_2;
+        let sweep = remaining * std::f32::consts::TAU;
+
+        // Draw arc as series of line segments (no allocation)
+        let segments = 32;
+        for i in 0..segments {
+            let t0 = i as f32 / segments as f32;
+            let t1 = (i + 1) as f32 / segments as f32;
+            let angle0 = start_angle - t0 * sweep;
+            let angle1 = start_angle - t1 * sweep;
+
+            let p0 = egui::Pos2::new(
+                center.x + radius * angle0.cos(),
+                center.y + radius * angle0.sin(),
+            );
+            let p1 = egui::Pos2::new(
+                center.x + radius * angle1.cos(),
+                center.y + radius * angle1.sin(),
+            );
+
+            painter.line_segment([p0, p1], egui::Stroke::new(2.0, color));
+        }
+    }
+}
+
 impl eframe::App for RbnVfdApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Process messages and periodic updates
@@ -466,6 +508,11 @@ impl eframe::App for RbnVfdApp {
                                     .monospace()
                                     .strong(),
                             );
+                            ui.label(
+                                egui::RichText::new(format!("{:>6}", "Age"))
+                                    .monospace()
+                                    .strong(),
+                            );
                         });
 
                         ui.separator();
@@ -495,6 +542,23 @@ impl eframe::App for RbnVfdApp {
                                     egui::RichText::new(format!("{:>5}", spot.spot_count))
                                         .monospace(),
                                 );
+
+                                // Age display
+                                let age_secs = spot.age_seconds();
+                                let age_text = if age_secs < 60 {
+                                    format!("{:>3}s", age_secs)
+                                } else {
+                                    format!("{:>3}m", age_secs / 60)
+                                };
+                                ui.label(
+                                    egui::RichText::new(age_text)
+                                        .monospace(),
+                                );
+
+                                // Ring indicator
+                                let max_age = Duration::from_secs(self.config.max_age_minutes as u64 * 60);
+                                let fraction = spot.age_fraction(max_age);
+                                draw_age_ring(ui, fraction);
                             });
                         }
                     }
