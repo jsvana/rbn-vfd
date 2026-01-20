@@ -126,10 +126,10 @@ impl VfdDisplay {
 
     /// Clear the display
     pub fn clear(&mut self) {
+        self.current_lines = [String::new(), String::new()];
         if let Some(ref mut port) = self.port {
             let _ = port.write_all(CLEAR_DISPLAY);
         }
-        self.current_lines = [String::new(), String::new()];
     }
 
     /// Pad or truncate text to exactly DISPLAY_WIDTH characters
@@ -140,43 +140,12 @@ impl VfdDisplay {
             .collect()
     }
 
-    /// Write both lines to the display
-    /// Uses simple protocol: clear, then write 40 chars (20 per line, auto-wraps)
-    fn write_display(&mut self, line1: &str, line2: &str) {
-        if let Some(ref mut port) = self.port {
-            // Clear and home cursor
-            let _ = port.write_all(CLEAR_DISPLAY);
-
-            // Write line 1 (exactly 20 chars) - cursor auto-advances
-            let padded1 = Self::format_line(line1);
-            let _ = port.write_all(padded1.as_bytes());
-
-            // Write line 2 (exactly 20 chars) - wraps to second line
-            let padded2 = Self::format_line(line2);
-            let _ = port.write_all(padded2.as_bytes());
-        }
-        self.current_lines[0] = line1.to_string();
-        self.current_lines[1] = line2.to_string();
-    }
-
-    /// Write text to a specific line (0 or 1)
-    fn write_line(&mut self, line: usize, text: &str) {
-        // Update internal state and rewrite entire display
-        self.current_lines[line] = text.to_string();
-        let line1 = self.current_lines[0].clone();
-        let line2 = self.current_lines[1].clone();
-        self.write_display(&line1, &line2);
-    }
-
-    /// Update display with spots (call periodically)
+    /// Update display state with spots (always runs, even without serial connection)
     pub fn update(&mut self, spots: &[AggregatedSpot]) {
-        if !self.is_open() {
-            return;
-        }
-
         // Random mode updates on its own timing (duty cycle within each second)
         if self.force_random_mode || spots.is_empty() {
-            self.update_random_mode();
+            self.update_random_mode_state();
+            self.write_to_port();
             return;
         }
 
@@ -187,27 +156,46 @@ impl VfdDisplay {
         }
         self.last_update = now;
 
+        // Update current_lines based on spots
         match spots.len() {
             1 => {
-                self.write_line(0, &spots[0].to_display_string());
-                self.write_line(1, "");
+                self.current_lines[0] = spots[0].to_display_string();
+                self.current_lines[1] = String::new();
             }
             2 => {
-                self.write_line(0, &spots[0].to_display_string());
-                self.write_line(1, &spots[1].to_display_string());
+                self.current_lines[0] = spots[0].to_display_string();
+                self.current_lines[1] = spots[1].to_display_string();
             }
             _ => {
                 // Scroll through spots
                 let idx1 = self.scroll_index % spots.len();
                 let idx2 = (self.scroll_index + 1) % spots.len();
-                self.write_line(0, &spots[idx1].to_display_string());
-                self.write_line(1, &spots[idx2].to_display_string());
+                self.current_lines[0] = spots[idx1].to_display_string();
+                self.current_lines[1] = spots[idx2].to_display_string();
                 self.scroll_index = (self.scroll_index + 1) % spots.len();
             }
         }
+
+        self.write_to_port();
     }
 
-    fn update_random_mode(&mut self) {
+    /// Write current_lines to serial port if connected
+    fn write_to_port(&mut self) {
+        if let Some(ref mut port) = self.port {
+            // Clear and home cursor
+            let _ = port.write_all(CLEAR_DISPLAY);
+
+            // Write line 1 (exactly 20 chars)
+            let padded1 = Self::format_line(&self.current_lines[0]);
+            let _ = port.write_all(padded1.as_bytes());
+
+            // Write line 2 (exactly 20 chars)
+            let padded2 = Self::format_line(&self.current_lines[1]);
+            let _ = port.write_all(padded2.as_bytes());
+        }
+    }
+
+    fn update_random_mode_state(&mut self) {
         // Get current time info
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -233,9 +221,8 @@ impl VfdDisplay {
             self.random_state.char_row = rng.gen_range(0..DISPLAY_LINES);
         }
 
-        // Handle transitions
+        // Update current_lines based on random state
         if should_show && !self.random_state.showing_char {
-            // Transition to showing character
             self.random_state.showing_char = true;
 
             // Create display with single character
@@ -254,11 +241,12 @@ impl VfdDisplay {
                 );
             }
 
-            self.write_display(&line0, &line1);
+            self.current_lines[0] = line0;
+            self.current_lines[1] = line1;
         } else if !should_show && self.random_state.showing_char {
-            // Transition to blank
             self.random_state.showing_char = false;
-            self.clear();
+            self.current_lines[0] = String::new();
+            self.current_lines[1] = String::new();
         }
     }
 
