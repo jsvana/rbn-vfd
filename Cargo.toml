@@ -1,8 +1,8 @@
 [package]
-name = "rbn-vfd-linux"
+name = "rbn-vfd"
 version = "0.1.0"
 edition = "2021"
-description = "RBN VFD Spot Display for Linux"
+description = "RBN VFD Spot Display"
 license = "MIT"
 
 [dependencies]
