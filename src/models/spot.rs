@@ -80,6 +80,17 @@ impl AggregatedSpot {
         format!("{}|{:.0}", self.callsign, self.center_frequency_khz)
     }
 
+    /// Get age in seconds since last spotted
+    pub fn age_seconds(&self) -> u64 {
+        self.last_spotted.elapsed().as_secs()
+    }
+
+    /// Get age as fraction of max_age (0.0 = just spotted, 1.0 = expired)
+    pub fn age_fraction(&self, max_age: std::time::Duration) -> f32 {
+        let age = self.last_spotted.elapsed();
+        (age.as_secs_f32() / max_age.as_secs_f32()).min(1.0)
+    }
+
     /// Format for VFD display (max 20 characters)
     /// Format: "FFFFF.F WW CCCCCCCCC" (freq aligned at decimal, WPM right-aligned, call left-aligned)
     /// Example: "14033.0 22 WO6W     "
