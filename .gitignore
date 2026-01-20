@@ -1,7 +1,2 @@
-bin/
-obj/
-publish/
-*.user
-*.suo
-.vs/
+/target/
 .claude/

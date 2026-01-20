@@ -183,7 +183,14 @@ impl eframe::App for RbnVfdApp {
         ctx.request_repaint_after(Duration::from_millis(100));
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("RBN VFD Display");
+            ui.horizontal(|ui| {
+                ui.heading("RBN VFD Display");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("✕").clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+            });
             ui.separator();
 
             // Connection section
@@ -223,6 +230,10 @@ impl eframe::App for RbnVfdApp {
                 if self.vfd_display.is_open() {
                     if ui.button("Close").clicked() {
                         self.close_vfd();
+                    }
+                    if ui.button("Blank").clicked() {
+                        self.vfd_display.clear();
+                        self.status_message = "Display blanked".to_string();
                     }
                 } else if ui.button("Open").clicked() {
                     self.open_vfd();
@@ -416,7 +427,12 @@ impl eframe::App for RbnVfdApp {
             ui.separator();
 
             // Active spots list
-            ui.heading(format!("Active Spots ({})", self.spot_store.count()));
+            ui.horizontal(|ui| {
+                ui.heading(format!("Active Spots ({})", self.spot_store.count()));
+                if ui.button("Clear").clicked() {
+                    self.spot_store.clear();
+                }
+            });
 
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
