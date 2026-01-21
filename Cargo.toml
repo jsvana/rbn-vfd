@@ -1,6 +1,6 @@
 [package]
 name = "rbn-vfd"
-version = "1.0.5"
+version = "1.0.6"
 edition = "2021"
 description = "RBN VFD Spot Display"
 license = "MIT"
