@@ -507,6 +507,30 @@ impl eframe::App for RbnVfdApp {
                 }
             });
 
+            // Tune controls
+            ui.horizontal(|ui| {
+                // Connection indicator
+                let connected = self.radio_controller.is_connected();
+                let indicator_color = if connected {
+                    egui::Color32::from_rgb(0, 200, 0)
+                } else {
+                    egui::Color32::from_rgb(200, 0, 0)
+                };
+                let (rect, _) = ui.allocate_exact_size(egui::Vec2::splat(12.0), egui::Sense::hover());
+                ui.painter().circle_filled(rect.center(), 5.0, indicator_color);
+
+                // Tune button
+                let can_tune = connected && self.selected_spot.is_some();
+                if ui.add_enabled(can_tune, egui::Button::new("Tune")).clicked() {
+                    self.tune_to_selected();
+                }
+
+                // Show selected spot info
+                if let Some(spot) = &self.selected_spot {
+                    ui.label(format!("{} @ {:.1} kHz", spot.callsign, spot.frequency_khz));
+                }
+            });
+
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
@@ -618,12 +642,26 @@ impl eframe::App for RbnVfdApp {
                             // Handle double-click to tune
                             if response.response.interact(egui::Sense::click()).double_clicked() {
                                 self.selected_spot = Some(spot.clone());
-                                // TODO: Trigger tune action
+                                self.tune_to_selected();
                             }
                         }
                     }
                 });
         });
+
+        // Error popup
+        if let Some(error) = &self.radio_error.clone() {
+            egui::Window::new("Radio Error")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.label(error);
+                    if ui.button("OK").clicked() {
+                        self.radio_error = None;
+                    }
+                });
+        }
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
