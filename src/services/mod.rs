@@ -1,4 +1,5 @@
 mod rbn_client;
+pub mod radio;
 mod spot_store;
 mod vfd_display;
 
