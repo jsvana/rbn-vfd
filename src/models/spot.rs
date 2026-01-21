@@ -47,6 +47,7 @@ pub struct AggregatedSpot {
     pub average_speed: f64,
     pub spot_count: u32,
     pub last_spotted: Instant,
+    pub mode: String,
 }
 
 impl AggregatedSpot {
@@ -60,6 +61,7 @@ impl AggregatedSpot {
             average_speed: raw.speed_wpm as f64,
             spot_count: 1,
             last_spotted: Instant::now(),
+            mode: raw.mode.clone(),
         }
     }
 
@@ -72,6 +74,7 @@ impl AggregatedSpot {
             self.highest_snr = raw.snr;
         }
         self.last_spotted = Instant::now();
+        self.mode = raw.mode.clone();
     }
 
     /// Generate the unique key for this spot (callsign + center frequency)
