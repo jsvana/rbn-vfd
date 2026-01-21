@@ -17,11 +17,14 @@ pub use omnirig::OmniRigController;
 #[allow(dead_code)]
 pub enum RadioMode {
     Cw,
+    CwReverse,
     Usb,
     Lsb,
     Rtty,
+    RttyReverse,
     Am,
     Fm,
+    Data,
 }
 
 impl RadioMode {
@@ -40,11 +43,14 @@ impl RadioMode {
     pub fn to_rigctld_mode(self) -> &'static str {
         match self {
             RadioMode::Cw => "CW",
+            RadioMode::CwReverse => "CWR",
             RadioMode::Usb => "USB",
             RadioMode::Lsb => "LSB",
             RadioMode::Rtty => "RTTY",
+            RadioMode::RttyReverse => "RTTYR",
             RadioMode::Am => "AM",
             RadioMode::Fm => "FM",
+            RadioMode::Data => "PKTUSB",
         }
     }
 }

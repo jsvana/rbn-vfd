@@ -2527,7 +2527,7 @@ checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
 name = "rbn-vfd"
-version = "0.2.0"
+version = "1.0.5"
 dependencies = [
  "configparser",
  "directories",
@@ -2536,6 +2536,7 @@ dependencies = [
  "regex",
  "serialport",
  "tokio",
+ "winsafe",
 ]
 
 [[package]]
@@ -4069,6 +4070,12 @@ checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "winsafe"
+version = "0.0.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d6ad6cbd9c6e5144971e326303f0e453b61d82e4f72067fccf23106bccd8437"
 
 [[package]]
 name = "wit-bindgen"

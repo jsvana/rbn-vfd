@@ -13,3 +13,6 @@ configparser = "3"
 directories = "5"
 rand = "0.8"
 regex = "1"
+
+[target.'cfg(windows)'.dependencies]
+winsafe = { version = "0.0.22", features = ["ole"] }
