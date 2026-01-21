@@ -30,6 +30,8 @@ pub struct RbnVfdApp {
     radio_error: Option<String>,
     /// Whether to show radio settings dialog
     show_radio_settings: bool,
+    /// Temporary radio config for settings dialog
+    temp_radio_config: Option<crate::config::RadioConfig>,
 }
 
 impl RbnVfdApp {
@@ -66,6 +68,7 @@ impl RbnVfdApp {
             radio_controller,
             radio_error: None,
             show_radio_settings: false,
+            temp_radio_config: None,
         }
     }
 
@@ -681,6 +684,138 @@ impl eframe::App for RbnVfdApp {
                         self.radio_error = None;
                     }
                 });
+        }
+
+        // Radio settings dialog
+        if self.show_radio_settings {
+            // Initialize temp config if needed
+            if self.temp_radio_config.is_none() {
+                self.temp_radio_config = Some(self.config.radio.clone());
+            }
+
+            let mut open = true;
+            let mut apply_settings = false;
+            let mut cancel_settings = false;
+            let mut test_connection = false;
+
+            egui::Window::new("Radio Settings")
+                .collapsible(false)
+                .resizable(false)
+                .open(&mut open)
+                .show(ctx, |ui| {
+                    if let Some(ref mut temp) = self.temp_radio_config {
+                        ui.checkbox(&mut temp.enabled, "Enable radio control");
+
+                        ui.add_space(8.0);
+
+                        #[cfg(target_os = "windows")]
+                        {
+                            ui.label("Backend:");
+                            ui.horizontal(|ui| {
+                                ui.radio_value(&mut temp.backend, "omnirig".to_string(), "OmniRig");
+                                ui.radio_value(&mut temp.backend, "rigctld".to_string(), "rigctld");
+                            });
+                        }
+
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            ui.label("Backend: rigctld");
+                        }
+
+                        ui.add_space(8.0);
+
+                        #[cfg(target_os = "windows")]
+                        if temp.backend == "omnirig" {
+                            ui.horizontal(|ui| {
+                                ui.label("OmniRig Rig:");
+                                ui.radio_value(&mut temp.omnirig_rig, 1, "Rig 1");
+                                ui.radio_value(&mut temp.omnirig_rig, 2, "Rig 2");
+                            });
+                        } else {
+                            ui.horizontal(|ui| {
+                                ui.label("Host:");
+                                ui.text_edit_singleline(&mut temp.rigctld_host);
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Port:");
+                                let mut port_str = temp.rigctld_port.to_string();
+                                if ui.text_edit_singleline(&mut port_str).changed() {
+                                    if let Ok(port) = port_str.parse() {
+                                        temp.rigctld_port = port;
+                                    }
+                                }
+                            });
+                        }
+
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            ui.horizontal(|ui| {
+                                ui.label("Host:");
+                                ui.text_edit_singleline(&mut temp.rigctld_host);
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Port:");
+                                let mut port_str = temp.rigctld_port.to_string();
+                                if ui.text_edit_singleline(&mut port_str).changed() {
+                                    if let Ok(port) = port_str.parse() {
+                                        temp.rigctld_port = port;
+                                    }
+                                }
+                            });
+                        }
+
+                        ui.add_space(8.0);
+
+                        // Test connection button
+                        if temp.enabled {
+                            if ui.button("Test Connection").clicked() {
+                                test_connection = true;
+                            }
+                        }
+
+                        ui.add_space(8.0);
+
+                        ui.horizontal(|ui| {
+                            if ui.button("OK").clicked() {
+                                apply_settings = true;
+                            }
+                            if ui.button("Cancel").clicked() {
+                                cancel_settings = true;
+                            }
+                        });
+                    }
+                });
+
+            // Handle actions after the window closure to avoid borrow conflicts
+            if test_connection {
+                if let Some(ref temp) = self.temp_radio_config {
+                    let mut test_controller = radio::create_controller(temp);
+                    match test_controller.connect() {
+                        Ok(()) => {
+                            self.status_message = "Radio connection successful!".to_string();
+                        }
+                        Err(e) => {
+                            self.radio_error = Some(e.to_string());
+                        }
+                    }
+                }
+            }
+
+            if apply_settings {
+                if let Some(temp) = self.temp_radio_config.take() {
+                    self.config.radio = temp;
+                    self.radio_controller = radio::create_controller(&self.config.radio);
+                    if self.config.radio.enabled {
+                        let _ = self.radio_controller.connect();
+                    }
+                }
+                self.show_radio_settings = false;
+            }
+
+            if cancel_settings || !open {
+                self.show_radio_settings = false;
+                self.temp_radio_config = None;
+            }
         }
     }
 
