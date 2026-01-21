@@ -539,12 +539,17 @@ impl eframe::App for RbnVfdApp {
                 } else {
                     egui::Color32::from_rgb(200, 0, 0)
                 };
-                let (rect, _) = ui.allocate_exact_size(egui::Vec2::splat(12.0), egui::Sense::hover());
-                ui.painter().circle_filled(rect.center(), 5.0, indicator_color);
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::Vec2::splat(12.0), egui::Sense::hover());
+                ui.painter()
+                    .circle_filled(rect.center(), 5.0, indicator_color);
 
                 // Tune button
                 let can_tune = connected && self.selected_spot.is_some();
-                if ui.add_enabled(can_tune, egui::Button::new("Tune")).clicked() {
+                if ui
+                    .add_enabled(can_tune, egui::Button::new("Tune"))
+                    .clicked()
+                {
                     self.tune_to_selected();
                 }
 
@@ -604,7 +609,10 @@ impl eframe::App for RbnVfdApp {
                             let is_selected = self
                                 .selected_spot
                                 .as_ref()
-                                .map(|s| s.callsign == spot.callsign && (s.frequency_khz - spot.frequency_khz).abs() < 0.5)
+                                .map(|s| {
+                                    s.callsign == spot.callsign
+                                        && (s.frequency_khz - spot.frequency_khz).abs() < 0.5
+                                })
                                 .unwrap_or(false);
 
                             // Build the row text

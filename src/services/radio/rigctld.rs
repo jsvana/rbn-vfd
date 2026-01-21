@@ -31,9 +31,10 @@ impl RigctldController {
             .map_err(|e| RadioError::CommandFailed(e.to_string()))?;
 
         // Read response
-        let mut reader = BufReader::new(stream.try_clone().map_err(|e| {
-            RadioError::CommandFailed(format!("Failed to clone stream: {}", e))
-        })?);
+        let mut reader =
+            BufReader::new(stream.try_clone().map_err(|e| {
+                RadioError::CommandFailed(format!("Failed to clone stream: {}", e))
+            })?);
         let mut response = String::new();
         reader
             .read_line(&mut response)
@@ -68,9 +69,9 @@ impl RadioController for RigctldController {
     fn connect(&mut self) -> RadioResult<()> {
         let addr = format!("{}:{}", self.host, self.port);
         let stream = TcpStream::connect_timeout(
-            &addr.parse().map_err(|e| {
-                RadioError::ConnectionFailed(format!("Invalid address: {}", e))
-            })?,
+            &addr
+                .parse()
+                .map_err(|e| RadioError::ConnectionFailed(format!("Invalid address: {}", e)))?,
             Duration::from_secs(3),
         )
         .map_err(|e| {
